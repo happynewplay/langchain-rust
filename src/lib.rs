@@ -5,6 +5,8 @@ pub mod document_loaders;
 pub mod embedding;
 pub mod language_models;
 pub mod llm;
+#[cfg(feature = "mcp")]
+pub mod mcp;
 pub mod memory;
 pub mod output_parsers;
 pub mod prompt;

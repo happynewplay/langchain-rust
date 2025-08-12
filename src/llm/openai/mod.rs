@@ -93,7 +93,7 @@ impl Default for OpenAI<OpenAIConfig> {
 }
 
 #[async_trait]
-impl<C: Config + Send + Sync + 'static> LLM for OpenAI<C> {
+impl<C: Config + Send + Sync + 'static + Clone> LLM for OpenAI<C> {
     async fn generate(&self, prompt: &[Message]) -> Result<GenerateResult, LLMError> {
         let client = Client::with_config(self.config.clone());
         let request = self.generate_request(prompt, self.options.streaming_func.is_some())?;
@@ -120,8 +120,8 @@ impl<C: Config + Send + Sync + 'static> LLM for OpenAI<C> {
                                     )
                                     .await;
                                 }
-                                if let Some(content) = chat_choice.delta.content {
-                                    generate_result.generation.push_str(&content);
+                                if let Some(content) = &chat_choice.delta.content {
+                                    generate_result.generation.push_str(content);
                                 }
                             }
                         }

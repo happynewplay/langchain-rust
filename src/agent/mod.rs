@@ -10,5 +10,17 @@ pub use chat::*;
 mod open_ai_tools;
 pub use open_ai_tools::*;
 
+#[cfg(feature = "mcp")]
+mod mcp_agent;
+#[cfg(feature = "mcp")]
+pub use mcp_agent::*;
+
+// Note: MCP executor temporarily disabled due to Send trait issues
+// Will be re-enabled in a future version with proper async stream handling
+// #[cfg(feature = "mcp")]
+// mod mcp_executor;
+// #[cfg(feature = "mcp")]
+// pub use mcp_executor::*;
+
 mod error;
 pub use error::*;
