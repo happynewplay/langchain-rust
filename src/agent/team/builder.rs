@@ -1,12 +1,10 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::{
     agent::{
         human::{HumanAgentConfig, HumanInteractionInterface, InterventionCondition, TerminationCondition},
         Agent, AgentError,
     },
-    schemas::memory::BaseMemory,
 };
 
 use super::{

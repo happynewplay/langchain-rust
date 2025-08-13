@@ -176,14 +176,14 @@ impl AgentRegistry {
     pub fn agent_as_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
         self.agents.get(name).map(|agent| {
             let description = format!("Agent: {}", name);
-            let tool = UniversalAgentTool::new(agent.clone(), name, description);
-            
+            let tool = UniversalAgentTool::new(agent.clone(), name.to_string(), description);
+
             let tool = if let Some(timeout) = self.default_timeout {
                 tool.with_timeout(timeout)
             } else {
                 tool
             };
-            
+
             Arc::new(tool) as Arc<dyn Tool>
         })
     }

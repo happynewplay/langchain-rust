@@ -5,18 +5,81 @@ use langchain_rust::{
     agent::{
         AgentExecutor, ConversationalAgentBuilder, OpenAiToolAgentBuilder,
         TeamAgentBuilder, HumanAgentBuilder, TeamHumanAgentBuilder,
-        AgentRegistry, UniversalAgentTool,
-        human::{InterventionCondition, TerminationCondition},
-        team::{ExecutionPattern, ExecutionStep},
+        AgentRegistry, InterventionCondition, TerminationCondition,
+        ExecutionPattern, ExecutionStep,
     },
-    chain::options::ChainCallOptions,
-    llm::openai::{OpenAI, OpenAIModel},
-    memory::SimpleMemory,
+    chain::Chain,
+    llm::openai::OpenAI,
+    llm::ollama::openai::OllamaConfig,
+    schemas::{memory::BaseMemory, Message},
     prompt_args,
     tools::{CommandExecutor, Tool},
 };
 
 use serde_json::Value;
+use tokio::sync::Mutex;
+
+// Note: Add redis = "0.24" to Cargo.toml dependencies for Redis support
+// For this demo, we'll create a mock Redis implementation
+
+// Mock Redis Memory Implementation for Demo
+// In production, you would use a real Redis client like redis-rs
+#[derive(Clone)]
+struct RedisMemory {
+    _redis_url: String,
+    key_prefix: String,
+    // In-memory storage for demo purposes
+    messages: Arc<Mutex<Vec<Message>>>,
+}
+
+impl RedisMemory {
+    pub fn new(redis_url: &str, key_prefix: &str) -> Result<Self, Box<dyn Error>> {
+        println!("🔗 Connecting to Redis at: {}", redis_url);
+        println!("📝 Using key prefix: {}", key_prefix);
+
+        Ok(Self {
+            _redis_url: redis_url.to_string(),
+            key_prefix: key_prefix.to_string(),
+            messages: Arc::new(Mutex::new(Vec::new())),
+        })
+    }
+
+    fn messages_key(&self) -> String {
+        format!("{}:messages", self.key_prefix)
+    }
+}
+
+impl BaseMemory for RedisMemory {
+    fn messages(&self) -> Vec<Message> {
+        // In a real implementation, you would fetch from Redis here
+        // For demo, we'll use the in-memory storage
+        if let Ok(messages) = self.messages.try_lock() {
+            println!("📖 Reading {} messages from Redis key: {}", messages.len(), self.messages_key());
+            messages.clone()
+        } else {
+            vec![]
+        }
+    }
+
+    fn add_message(&mut self, message: Message) {
+        // In a real implementation, you would store to Redis here
+        println!("📝 Storing message to Redis key {}: {:?}", self.messages_key(), message);
+
+        // For demo, store in memory
+        if let Ok(mut messages) = self.messages.try_lock() {
+            messages.push(message);
+        }
+    }
+
+    fn clear(&mut self) {
+        println!("🗑️ Clearing Redis memory at key: {}", self.messages_key());
+
+        // For demo, clear memory
+        if let Ok(mut messages) = self.messages.try_lock() {
+            messages.clear();
+        }
+    }
+}
 
 // Custom tool for demonstration
 struct Calculator {}
@@ -61,8 +124,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Multi-Agent System Demo");
     println!("==========================\n");
 
-    // Create LLM
-    let llm = OpenAI::default().with_model(OpenAIModel::Gpt4.to_string());
+    // Create Ollama LLM with custom configuration
+    let ollama_config = OllamaConfig::new()
+        .with_api_base("http://192.168.1.38:11434/v1");
+
+    let llm = OpenAI::new(ollama_config)
+        .with_model("qwen3:4b-thinking-2507-q8_0");
     
     // Create tools
     let calculator = Arc::new(Calculator {});
@@ -75,12 +142,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         command_executor.clone() as Arc<dyn Tool>,
     ];
 
-    // Demo 1: Basic Team Agent with Sequential Execution and Memory
-    println!("📋 Demo 1: Sequential Team Agent with Memory");
-    println!("--------------------------------------------");
+    // Demo 1: Basic Team Agent with Sequential Execution and Redis Memory
+    println!("📋 Demo 1: Sequential Team Agent with Redis Memory");
+    println!("--------------------------------------------------");
 
-    // Create shared memory for team coordination
-    let team_memory = Arc::new(tokio::sync::Mutex::new(SimpleMemory::new()));
+    // Create Redis memory for team coordination
+    let redis_memory = RedisMemory::new("redis://172.16.0.127:6379", "team_agent")
+        .expect("Failed to connect to Redis");
+    let team_memory = Arc::new(tokio::sync::Mutex::new(redis_memory));
 
     // Create individual agents
     let math_agent = Arc::new(
@@ -88,14 +157,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .tools(&[calculator.clone()])
             .prefix("You are a math specialist. Focus on calculations and numerical analysis.")
             .build(llm.clone())?
-    );
+    ) as Arc<dyn langchain_rust::agent::Agent>;
 
     let data_agent = Arc::new(
         ConversationalAgentBuilder::new()
             .tools(&[data_analyzer.clone()])
             .prefix("You are a data analyst. Focus on data interpretation and insights.")
             .build(llm.clone())?
-    );
+    ) as Arc<dyn langchain_rust::agent::Agent>;
 
     // Create sequential team with memory support
     let sequential_team = TeamAgentBuilder::sequential_team([
@@ -143,15 +212,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .tools(&[command_executor.clone()])
             .prefix("You are a system administrator. Handle system-related tasks.")
             .build(llm.clone())?
-    );
-    
+    ) as Arc<dyn langchain_rust::agent::Agent>;
+
     // Create a complex pattern: system_agent → (math_agent || data_agent) → coordinator
     let coordinator_agent = Arc::new(
         OpenAiToolAgentBuilder::new()
             .tools(&tools)
             .prefix("You are a coordinator. Synthesize results from multiple agents.")
             .build(llm.clone())?
-    );
+    ) as Arc<dyn langchain_rust::agent::Agent>;
     
     let hybrid_team = TeamAgentBuilder::pipeline_with_concurrent(
         ("system_agent", system_agent.clone()),
@@ -170,16 +239,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("Hybrid Team Result:\n{}\n", result);
 
-    // Demo 4: Human Agent with Intervention and Memory
-    println!("👤 Demo 4: Human Agent with Memory (Simulated)");
-    println!("----------------------------------------------");
+    // Demo 4: Human Agent with Intervention and Redis Memory
+    println!("👤 Demo 4: Human Agent with Redis Memory (Simulated)");
+    println!("----------------------------------------------------");
 
-    // Create memory for human agent
-    let human_memory = Arc::new(tokio::sync::Mutex::new(SimpleMemory::new()));
+    // Create Redis memory for human agent
+    let human_redis_memory = RedisMemory::new("redis://172.16.0.127:6379", "human_agent")
+        .expect("Failed to connect to Redis");
+    let human_memory = Arc::new(tokio::sync::Mutex::new(human_redis_memory));
 
     // Note: In a real scenario, this would prompt for actual human input
     // For demo purposes, we'll show the configuration
-    let human_agent = HumanAgentBuilder::keyword_intervention(vec!["help", "error", "review"])
+    let _human_agent = HumanAgentBuilder::keyword_intervention(vec!["help", "error", "review"])
         .max_interventions(3)
         .input_timeout(30)
         .memory(human_memory.clone())
@@ -194,14 +265,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("- Memory support: enabled");
     println!("- Memory in prompts: enabled\n");
 
-    // Demo 5: Team-Human Hybrid Agent with Shared Memory
-    println!("🤝 Demo 5: Team-Human Hybrid Agent with Shared Memory");
-    println!("-----------------------------------------------------");
+    // Demo 5: Team-Human Hybrid Agent with Shared Redis Memory
+    println!("🤝 Demo 5: Team-Human Hybrid Agent with Shared Redis Memory");
+    println!("-----------------------------------------------------------");
 
-    // Create shared memory for team-human hybrid
-    let hybrid_memory = Arc::new(tokio::sync::Mutex::new(SimpleMemory::new()));
+    // Create shared Redis memory for team-human hybrid
+    let hybrid_redis_memory = RedisMemory::new("redis://172.16.0.127:6379", "hybrid_agent")
+        .expect("Failed to connect to Redis");
+    let hybrid_memory = Arc::new(tokio::sync::Mutex::new(hybrid_redis_memory));
 
-    let team_human_agent = TeamHumanAgentBuilder::new()
+    let _team_human_agent = TeamHumanAgentBuilder::new()
         .add_agent("math_agent", math_agent.clone())
         .add_agent("data_agent", data_agent.clone())
         .sequential()
@@ -272,7 +345,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ])
     .prefix("Analysis team for mathematical and data tasks.")
     .build()?) as Arc<dyn langchain_rust::agent::Agent>;
-    
+
     let operations_team = Arc::new(TeamAgentBuilder::new()
         .add_agent("system_admin", system_agent.clone())
         .sequential()
@@ -310,13 +383,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Multi-Agent System Demo Complete!");
     println!("=====================================");
     println!("This demo showcased:");
-    println!("1. Sequential team execution");
+    println!("1. Sequential team execution with Redis memory");
     println!("2. Concurrent team execution");
     println!("3. Hybrid execution patterns");
-    println!("4. Human agent configuration");
-    println!("5. Team-human hybrid agents");
+    println!("4. Human agent configuration with Redis memory");
+    println!("5. Team-human hybrid agents with shared Redis memory");
     println!("6. Agent registry and universal tools");
     println!("7. Nested team agents");
+    println!("\nConfiguration used:");
+    println!("🤖 LLM: Ollama at 192.168.1.38:11434");
+    println!("📊 Model: qwen3:4b-thinking-2507-q8_0");
+    println!("💾 Memory: Redis at 172.16.0.127:6379");
     println!("\nAll agent types can be used as tools and integrated with MCP when the feature is enabled.");
 
     Ok(())

@@ -1,9 +1,7 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::{
     agent::AgentError,
-    schemas::memory::BaseMemory,
     tools::Tool,
 };
 

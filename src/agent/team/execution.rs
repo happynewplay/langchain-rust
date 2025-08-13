@@ -6,7 +6,7 @@ use tokio::time::timeout;
 use futures::future::try_join_all;
 
 use crate::{
-    agent::{Agent, AgentError},
+    agent::AgentError,
     prompt::PromptArgs,
     schemas::agent::{AgentAction, AgentEvent},
 };

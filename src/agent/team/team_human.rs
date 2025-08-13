@@ -237,13 +237,13 @@ impl TeamHumanAgent {
 
     /// Check if human intervention should occur
     fn should_intervene(&self, context: &InteractionContext) -> bool {
-        let mut temp_manager = HumanInteractionManager::with_console(self.config.human_config.clone());
+        let temp_manager = HumanInteractionManager::with_console(self.config.human_config.clone());
         temp_manager.should_intervene(context)
     }
 
     /// Check if termination should occur
     fn should_terminate(&self, context: &InteractionContext) -> bool {
-        let mut temp_manager = HumanInteractionManager::with_console(self.config.human_config.clone());
+        let temp_manager = HumanInteractionManager::with_console(self.config.human_config.clone());
         temp_manager.should_terminate(context)
     }
 
