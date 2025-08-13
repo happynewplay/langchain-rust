@@ -1,7 +1,9 @@
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::{
     agent::AgentError,
+    schemas::memory::BaseMemory,
     tools::Tool,
 };
 
@@ -101,6 +103,18 @@ impl HumanAgentBuilder {
     /// Set custom human interaction interface
     pub fn interface(mut self, interface: Box<dyn HumanInteractionInterface>) -> Self {
         self.interface = Some(interface);
+        self
+    }
+
+    /// Set memory for the human agent
+    pub fn memory(mut self, memory: Arc<tokio::sync::Mutex<dyn crate::schemas::memory::BaseMemory>>) -> Self {
+        self.config = self.config.with_memory(memory);
+        self
+    }
+
+    /// Set whether to include memory in prompts
+    pub fn include_memory_in_prompts(mut self, include: bool) -> Self {
+        self.config = self.config.with_include_memory_in_prompts(include);
         self
     }
 

@@ -74,7 +74,7 @@ impl TeamAgent {
     ) -> Result<TeamExecutionResult, AgentError> {
         // Add team context to inputs
         let mut team_inputs = inputs.clone();
-        
+
         // Add team metadata
         team_inputs.insert("team_agent_id".to_string(), json!("team"));
         team_inputs.insert(
@@ -89,6 +89,22 @@ impl TeamAgent {
         // Add team prefix if configured
         if let Some(prefix) = &self.config.prefix {
             team_inputs.insert("team_prefix".to_string(), json!(prefix));
+        }
+
+        // Add memory context if available
+        if let Some(memory) = &self.config.memory {
+            let memory_guard = memory.lock().await;
+            let chat_history = memory_guard.messages();
+            team_inputs.insert("chat_history".to_string(), json!(chat_history));
+
+            if self.config.use_coordination_prompts {
+                let coordination_context = format!(
+                    "Team coordination context: {} child agents executing in {:?} pattern",
+                    self.config.child_agents.len(),
+                    self.config.execution_pattern
+                );
+                team_inputs.insert("coordination_context".to_string(), json!(coordination_context));
+            }
         }
 
         // Execute the team
@@ -260,8 +276,7 @@ mod tests {
         tools::Tool,
     };
     use async_trait::async_trait;
-    use serde_json::Value;
-    use std::{error::Error, sync::Arc};
+    use std::sync::Arc;
     use super::super::config::{ChildAgentConfig, ExecutionPattern};
 
     // Mock agent for testing

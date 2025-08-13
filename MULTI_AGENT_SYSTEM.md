@@ -27,14 +27,24 @@ Team agents coordinate multiple child agents using different execution patterns:
 #### Basic Usage
 
 ```rust
-use langchain_rust::agent::{TeamAgentBuilder, ExecutionPattern};
+use langchain_rust::{
+    agent::{TeamAgentBuilder, ExecutionPattern},
+    memory::SimpleMemory,
+};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-// Sequential team
+// Create shared memory for team coordination
+let team_memory = Arc::new(Mutex::new(SimpleMemory::new()));
+
+// Sequential team with memory
 let team = TeamAgentBuilder::sequential_team([
     ("agent_a", agent_a),
     ("agent_b", agent_b),
 ])
 .prefix("You are coordinating a sequential workflow.")
+.memory(team_memory.clone())
+.coordination_prompts(true)
 .build()?;
 
 // Concurrent team
@@ -42,6 +52,7 @@ let team = TeamAgentBuilder::concurrent_team([
     ("agent_a", agent_a),
     ("agent_b", agent_b),
 ])
+.memory(team_memory.clone())
 .build()?;
 
 // Complex hybrid pattern
@@ -86,10 +97,18 @@ Human agents enable conditional human intervention based on configurable trigger
 #### Configuration
 
 ```rust
-use langchain_rust::agent::{
-    HumanAgentBuilder,
-    human::{InterventionCondition, TerminationCondition}
+use langchain_rust::{
+    agent::{
+        HumanAgentBuilder,
+        human::{InterventionCondition, TerminationCondition}
+    },
+    memory::SimpleMemory,
 };
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+// Create memory for human agent
+let human_memory = Arc::new(Mutex::new(SimpleMemory::new()));
 
 let human_agent = HumanAgentBuilder::new()
     .add_intervention_condition(
@@ -110,6 +129,8 @@ let human_agent = HumanAgentBuilder::new()
     )
     .max_interventions(5)
     .input_timeout(300) // 5 minutes
+    .memory(human_memory.clone())
+    .include_memory_in_prompts(true)
     .build()?;
 ```
 
@@ -134,12 +155,23 @@ let agent = HumanAgentBuilder::always_intervene().build()?;
 Combine team orchestration with human intervention:
 
 ```rust
-use langchain_rust::agent::TeamHumanAgentBuilder;
+use langchain_rust::{
+    agent::TeamHumanAgentBuilder,
+    memory::SimpleMemory,
+};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+// Create shared memory for team-human hybrid
+let hybrid_memory = Arc::new(Mutex::new(SimpleMemory::new()));
 
 let hybrid_agent = TeamHumanAgentBuilder::new()
     .add_agent("math_agent", math_agent)
     .add_agent("data_agent", data_agent)
     .sequential()
+    .memory(hybrid_memory.clone())
+    .coordination_prompts(true)
+    .include_memory_in_prompts(true)
     .add_intervention_condition(
         InterventionCondition::new("complex", "input")
     )
@@ -240,6 +272,74 @@ let master_team = TeamAgentBuilder::nested_team_pattern(
 )
 .build()?;
 ```
+
+## LLM and Memory Integration
+
+### Memory Support
+
+All agent types support memory integration for maintaining conversation history and context:
+
+#### Team Agent Memory
+
+```rust
+use langchain_rust::{agent::TeamAgentBuilder, memory::SimpleMemory};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+let team_memory = Arc::new(Mutex::new(SimpleMemory::new()));
+
+let team = TeamAgentBuilder::new()
+    .add_agent("agent_a", agent_a)
+    .add_agent("agent_b", agent_b)
+    .memory(team_memory.clone())
+    .coordination_prompts(true)  // Include team coordination context
+    .build()?;
+```
+
+#### Human Agent Memory
+
+```rust
+let human_memory = Arc::new(Mutex::new(SimpleMemory::new()));
+
+let human_agent = HumanAgentBuilder::new()
+    .add_intervention_condition(InterventionCondition::new("help", "input"))
+    .add_termination_condition(TerminationCondition::new("done", "input"))
+    .memory(human_memory.clone())
+    .include_memory_in_prompts(true)  // Include chat history in human prompts
+    .build()?;
+```
+
+#### Shared Memory Across Agent Types
+
+```rust
+// Create shared memory for coordination
+let shared_memory = Arc::new(Mutex::new(SimpleMemory::new()));
+
+// Team-human hybrid with shared memory
+let hybrid_agent = TeamHumanAgentBuilder::new()
+    .add_agent("specialist", specialist_agent)
+    .memory(shared_memory.clone())  // Shared across team and human components
+    .coordination_prompts(true)
+    .include_memory_in_prompts(true)
+    .build()?;
+```
+
+### Memory Features
+
+- **Shared Context**: Memory can be shared across multiple agents for coordination
+- **Conversation History**: Automatic tracking of agent interactions and human inputs
+- **Context Injection**: Memory content is automatically included in agent prompts
+- **Coordination Prompts**: Team agents can include coordination context from memory
+- **Human Context**: Human agents can include conversation history in intervention prompts
+
+### LLM Integration
+
+While team and human agents don't directly use LLMs (they orchestrate other agents that do), they fully support:
+
+- **Child Agent LLMs**: All child agents can use any supported LLM
+- **Memory Integration**: LLM-based child agents benefit from shared memory context
+- **Tool Integration**: LLM agents can use team/human agents as tools
+- **Prompt Enhancement**: Memory and coordination context enhances LLM prompts
 
 ## Advanced Features
 

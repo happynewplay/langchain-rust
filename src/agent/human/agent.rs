@@ -102,6 +102,20 @@ impl HumanAgent {
             context = context.with_additional("system_prompt", prefix.clone());
         }
 
+        // Add memory context if available and configured
+        if let Some(memory) = &self.config.memory {
+            if self.config.include_memory_in_prompts {
+                let memory_guard = memory.lock().await;
+                let chat_history = memory_guard.messages();
+                let history_summary = chat_history
+                    .iter()
+                    .map(|msg| format!("{:?}: {}", msg.message_type, msg.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                context = context.with_additional("chat_history", history_summary);
+            }
+        }
+
         // Check for termination first
         if self.interaction_manager.should_terminate(&context) {
             return Ok(AgentEvent::Finish(AgentFinish {

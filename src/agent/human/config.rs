@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
+use crate::schemas::memory::BaseMemory;
 
 /// Condition that triggers human intervention
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,7 +32,7 @@ pub struct TerminationCondition {
 }
 
 /// Configuration for human agent behavior
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HumanAgentConfig {
     /// Conditions that trigger human intervention
     pub intervention_conditions: Vec<InterventionCondition>,
@@ -46,6 +48,10 @@ pub struct HumanAgentConfig {
     pub allow_empty_response: bool,
     /// System prompt/prefix for the human agent
     pub prefix: Option<String>,
+    /// Memory for storing conversation history
+    pub memory: Option<Arc<Mutex<dyn BaseMemory>>>,
+    /// Whether to include memory context in human prompts
+    pub include_memory_in_prompts: bool,
 }
 
 impl Default for HumanAgentConfig {
@@ -58,6 +64,8 @@ impl Default for HumanAgentConfig {
             default_prompt: Some("Please provide your input:".to_string()),
             allow_empty_response: false,
             prefix: None,
+            memory: None,
+            include_memory_in_prompts: true,
         }
     }
 }
@@ -107,6 +115,18 @@ impl HumanAgentConfig {
     /// Set system prompt/prefix
     pub fn with_prefix<S: Into<String>>(mut self, prefix: S) -> Self {
         self.prefix = Some(prefix.into());
+        self
+    }
+
+    /// Set memory for the human agent
+    pub fn with_memory(mut self, memory: Arc<Mutex<dyn BaseMemory>>) -> Self {
+        self.memory = Some(memory);
+        self
+    }
+
+    /// Set whether to include memory context in human prompts
+    pub fn with_include_memory_in_prompts(mut self, include: bool) -> Self {
+        self.include_memory_in_prompts = include;
         self
     }
 

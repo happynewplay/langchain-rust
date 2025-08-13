@@ -1,10 +1,12 @@
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::{
     agent::{
         human::{HumanAgentConfig, HumanInteractionInterface, InterventionCondition, TerminationCondition},
         Agent, AgentError,
     },
+    schemas::memory::BaseMemory,
 };
 
 use super::{
@@ -108,6 +110,18 @@ impl TeamAgentBuilder {
     /// Set system prompt/prefix
     pub fn prefix<S: Into<String>>(mut self, prefix: S) -> Self {
         self.config = self.config.with_prefix(prefix);
+        self
+    }
+
+    /// Set memory for the team agent
+    pub fn memory(mut self, memory: Arc<tokio::sync::Mutex<dyn crate::schemas::memory::BaseMemory>>) -> Self {
+        self.config = self.config.with_memory(memory);
+        self
+    }
+
+    /// Set whether to use coordination prompts
+    pub fn coordination_prompts(mut self, use_coordination_prompts: bool) -> Self {
+        self.config = self.config.with_coordination_prompts(use_coordination_prompts);
         self
     }
 
@@ -481,6 +495,27 @@ impl TeamHumanAgentBuilder {
     /// Set input timeout
     pub fn input_timeout(mut self, timeout_seconds: u64) -> Self {
         self.human_config = self.human_config.with_input_timeout(timeout_seconds);
+        self
+    }
+
+    /// Set memory for both team and human components
+    pub fn memory(mut self, memory: Arc<tokio::sync::Mutex<dyn crate::schemas::memory::BaseMemory>>) -> Self {
+        // Set memory for team component
+        self.team_builder = self.team_builder.memory(memory.clone());
+        // Set memory for human component
+        self.human_config = self.human_config.with_memory(memory);
+        self
+    }
+
+    /// Set whether to include memory in human prompts
+    pub fn include_memory_in_prompts(mut self, include: bool) -> Self {
+        self.human_config = self.human_config.with_include_memory_in_prompts(include);
+        self
+    }
+
+    /// Set whether to use coordination prompts in team
+    pub fn coordination_prompts(mut self, use_coordination_prompts: bool) -> Self {
+        self.team_builder = self.team_builder.coordination_prompts(use_coordination_prompts);
         self
     }
 

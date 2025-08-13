@@ -75,10 +75,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         command_executor.clone() as Arc<dyn Tool>,
     ];
 
-    // Demo 1: Basic Team Agent with Sequential Execution
-    println!("📋 Demo 1: Sequential Team Agent");
-    println!("--------------------------------");
-    
+    // Demo 1: Basic Team Agent with Sequential Execution and Memory
+    println!("📋 Demo 1: Sequential Team Agent with Memory");
+    println!("--------------------------------------------");
+
+    // Create shared memory for team coordination
+    let team_memory = Arc::new(tokio::sync::Mutex::new(SimpleMemory::new()));
+
     // Create individual agents
     let math_agent = Arc::new(
         ConversationalAgentBuilder::new()
@@ -86,20 +89,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .prefix("You are a math specialist. Focus on calculations and numerical analysis.")
             .build(llm.clone())?
     );
-    
+
     let data_agent = Arc::new(
         ConversationalAgentBuilder::new()
             .tools(&[data_analyzer.clone()])
             .prefix("You are a data analyst. Focus on data interpretation and insights.")
             .build(llm.clone())?
     );
-    
-    // Create sequential team
+
+    // Create sequential team with memory support
     let sequential_team = TeamAgentBuilder::sequential_team([
         ("math_agent", math_agent.clone()),
         ("data_agent", data_agent.clone()),
     ])
     .prefix("You are coordinating a sequential analysis workflow.")
+    .memory(team_memory.clone())
+    .coordination_prompts(true)
     .build()?;
     
     let team_executor = AgentExecutor::from_agent(sequential_team);
@@ -165,31 +170,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("Hybrid Team Result:\n{}\n", result);
 
-    // Demo 4: Human Agent with Intervention
-    println!("👤 Demo 4: Human Agent (Simulated)");
-    println!("----------------------------------");
-    
+    // Demo 4: Human Agent with Intervention and Memory
+    println!("👤 Demo 4: Human Agent with Memory (Simulated)");
+    println!("----------------------------------------------");
+
+    // Create memory for human agent
+    let human_memory = Arc::new(tokio::sync::Mutex::new(SimpleMemory::new()));
+
     // Note: In a real scenario, this would prompt for actual human input
     // For demo purposes, we'll show the configuration
     let human_agent = HumanAgentBuilder::keyword_intervention(vec!["help", "error", "review"])
         .max_interventions(3)
         .input_timeout(30)
+        .memory(human_memory.clone())
+        .include_memory_in_prompts(true)
         .prefix("You are a human oversight agent. Intervene when needed.")
         .build()?;
-    
-    println!("Human agent configured with intervention conditions:");
+
+    println!("Human agent configured with:");
     println!("- Keywords: help, error, review");
     println!("- Max interventions: 3");
-    println!("- Timeout: 30 seconds\n");
+    println!("- Timeout: 30 seconds");
+    println!("- Memory support: enabled");
+    println!("- Memory in prompts: enabled\n");
 
-    // Demo 5: Team-Human Hybrid Agent
-    println!("🤝 Demo 5: Team-Human Hybrid Agent");
-    println!("----------------------------------");
-    
+    // Demo 5: Team-Human Hybrid Agent with Shared Memory
+    println!("🤝 Demo 5: Team-Human Hybrid Agent with Shared Memory");
+    println!("-----------------------------------------------------");
+
+    // Create shared memory for team-human hybrid
+    let hybrid_memory = Arc::new(tokio::sync::Mutex::new(SimpleMemory::new()));
+
     let team_human_agent = TeamHumanAgentBuilder::new()
         .add_agent("math_agent", math_agent.clone())
         .add_agent("data_agent", data_agent.clone())
         .sequential()
+        .memory(hybrid_memory.clone())
+        .coordination_prompts(true)
+        .include_memory_in_prompts(true)
         .add_intervention_condition(
             InterventionCondition::new("complex", "input")
                 .with_description("Intervene on complex tasks")
@@ -202,9 +220,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .intervene_after_team(false)
         .intervene_on_team_error(true)
         .build()?;
-    
+
     println!("Team-Human agent configured with:");
     println!("- Sequential team execution");
+    println!("- Shared memory across team and human components");
+    println!("- Coordination prompts enabled");
+    println!("- Memory context in human prompts");
     println!("- Pre-team intervention on 'complex' keyword");
     println!("- Error intervention enabled");
     println!("- Termination on 'done' keyword\n");

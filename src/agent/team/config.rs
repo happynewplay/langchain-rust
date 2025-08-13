@@ -1,6 +1,10 @@
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
-use crate::agent::Agent;
+use tokio::sync::Mutex;
+use crate::{
+    agent::Agent,
+    schemas::memory::BaseMemory,
+};
 
 /// Execution pattern for team agents
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +58,10 @@ pub struct TeamAgentConfig {
     pub global_timeout: Option<u64>,
     /// System prompt/prefix for the team agent
     pub prefix: Option<String>,
+    /// Memory for the team agent (shared across all child agents)
+    pub memory: Option<Arc<Mutex<dyn BaseMemory>>>,
+    /// Whether to use team-level coordination prompts
+    pub use_coordination_prompts: bool,
 }
 
 impl Default for TeamAgentConfig {
@@ -65,6 +73,8 @@ impl Default for TeamAgentConfig {
             break_on_error: true,
             global_timeout: Some(300), // 5 minutes default
             prefix: None,
+            memory: None,
+            use_coordination_prompts: true,
         }
     }
 }
@@ -108,6 +118,18 @@ impl TeamAgentConfig {
     /// Set system prompt/prefix
     pub fn with_prefix<S: Into<String>>(mut self, prefix: S) -> Self {
         self.prefix = Some(prefix.into());
+        self
+    }
+
+    /// Set memory for the team agent
+    pub fn with_memory(mut self, memory: Arc<Mutex<dyn BaseMemory>>) -> Self {
+        self.memory = Some(memory);
+        self
+    }
+
+    /// Set whether to use coordination prompts
+    pub fn with_coordination_prompts(mut self, use_coordination_prompts: bool) -> Self {
+        self.use_coordination_prompts = use_coordination_prompts;
         self
     }
 
