@@ -230,31 +230,22 @@ impl TeamExecutor {
     async fn execute_child_agent(
         &self,
         child: &ChildAgentConfig,
-        intermediate_steps: &[(AgentAction, String)],
+        _intermediate_steps: &[(AgentAction, String)],
         inputs: PromptArgs,
     ) -> Result<ChildAgentResult, AgentError> {
         let start_time = std::time::Instant::now();
 
         let execution_future = async {
-            match child.agent.plan(intermediate_steps, inputs).await {
-                Ok(AgentEvent::Finish(finish)) => Ok(ChildAgentResult {
-                    agent_id: child.id.clone(),
-                    output: finish.output,
-                    success: true,
-                    error: None,
-                    execution_time_ms: start_time.elapsed().as_millis() as u64,
-                }),
-                Ok(AgentEvent::Action(_)) => {
-                    // For team agents, we expect child agents to return Finish events
-                    // Actions would need to be handled by a higher-level executor
-                    Err(AgentError::OtherError(
-                        "Child agent returned Action instead of Finish".to_string(),
-                    ))
-                }
-                Err(e) => {
-                    let error_msg = e.to_string();
-                    if child.critical {
-                        Err(e)
+            // Execute the agent with proper Action/Finish handling
+            let mut intermediate_steps = Vec::new();
+            let max_iterations = 10; // Prevent infinite loops
+            let mut iteration = 0;
+
+            loop {
+                if iteration >= max_iterations {
+                    let error_msg = format!("Agent {} exceeded maximum iterations ({})", child.id, max_iterations);
+                    return if child.critical {
+                        Err(AgentError::OtherError(error_msg))
                     } else {
                         Ok(ChildAgentResult {
                             agent_id: child.id.clone(),
@@ -263,8 +254,55 @@ impl TeamExecutor {
                             error: Some(error_msg),
                             execution_time_ms: start_time.elapsed().as_millis() as u64,
                         })
+                    };
+                }
+
+                match child.agent.plan(&intermediate_steps, inputs.clone()).await {
+                    Ok(AgentEvent::Finish(finish)) => {
+                        return Ok(ChildAgentResult {
+                            agent_id: child.id.clone(),
+                            output: finish.output,
+                            success: true,
+                            error: None,
+                            execution_time_ms: start_time.elapsed().as_millis() as u64,
+                        });
+                    }
+                    Ok(AgentEvent::Action(actions)) => {
+                        // Execute each action
+                        for action in actions {
+                            let tools = child.agent.get_tools();
+                            let tool = tools.iter().find(|t| t.name() == action.tool);
+
+                            let result = match tool {
+                                Some(tool) => {
+                                    match tool.call(&action.tool_input).await {
+                                        Ok(result) => result,
+                                        Err(e) => format!("Tool execution failed: {}", e),
+                                    }
+                                }
+                                None => format!("Tool '{}' not found", action.tool),
+                            };
+
+                            intermediate_steps.push((action, result));
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = e.to_string();
+                        return if child.critical {
+                            Err(e)
+                        } else {
+                            Ok(ChildAgentResult {
+                                agent_id: child.id.clone(),
+                                output: format!("Error: {}", error_msg),
+                                success: false,
+                                error: Some(error_msg),
+                                execution_time_ms: start_time.elapsed().as_millis() as u64,
+                            })
+                        };
                     }
                 }
+
+                iteration += 1;
             }
         };
 
