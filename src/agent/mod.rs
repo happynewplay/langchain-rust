@@ -10,6 +10,15 @@ pub use chat::*;
 mod open_ai_tools;
 pub use open_ai_tools::*;
 
+mod team;
+pub use team::*;
+
+mod human;
+pub use human::*;
+
+mod universal_integration;
+pub use universal_integration::*;
+
 #[cfg(feature = "mcp")]
 mod mcp_agent;
 #[cfg(feature = "mcp")]
