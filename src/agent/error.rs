@@ -25,6 +25,9 @@ pub enum AgentError {
     #[error("Serde json error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
 
+    #[error("Output parsing error: {0}")]
+    OutputParsingError(String),
+
     #[error("Error: {0}")]
     OtherError(String),
 }
