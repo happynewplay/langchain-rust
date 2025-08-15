@@ -1,13 +1,13 @@
+#[cfg(feature = "mcp")]
 use std::sync::Arc;
 
+#[cfg(feature = "mcp")]
 use langchain_rust::{
-    agent::{mcp_executor::{McpAgentExecutor, McpExecutionConfig}, OpenAiToolAgentBuilder},
+    agent::{McpAgentEvent, McpAgentExecutor, McpExecutionConfig, OpenAiToolAgentBuilder},
     llm::openai::OpenAI,
+    mcp::{McpClient, McpClientConfig, McpTransport},
     prompt_args,
 };
-
-#[cfg(feature = "mcp")]
-use langchain_rust::mcp::{McpClient, McpClientConfig, McpTransport};
 
 /// Example demonstrating enhanced MCP agent with multiple tool calling support
 #[tokio::main]
@@ -22,12 +22,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             McpClientConfig::new_sse("http://127.0.0.1:8000/sse")
                 .with_client_name("enhanced-mcp-agent")
                 .with_client_version("1.0.0"),
-            
             McpClientConfig::new_child_process(
                 "python",
-                vec!["-m".to_string(), "mcp_server".to_string()]
+                vec!["-m".to_string(), "mcp_server".to_string()],
             ),
-            
             McpClientConfig::new_stdio(),
         ];
 
@@ -36,7 +34,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(client) => client,
             Err(e) => {
                 println!("Failed to connect to MCP server: {}", e);
-                println!("This example requires an MCP server running at http://127.0.0.1:8000/sse");
+                println!(
+                    "This example requires an MCP server running at http://127.0.0.1:8000/sse"
+                );
                 return Ok(());
             }
         };
@@ -75,9 +75,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Example 1: Single tool call
         println!("\n=== Example 1: Single Tool Call ===");
-        let result = executor.invoke(prompt_args! {
-            "input" => "What tools are available?"
-        }).await?;
+        let result = executor
+            .invoke(prompt_args! {
+                "input" => "What tools are available?"
+            })
+            .await?;
         println!("Result: {}", result);
 
         // Example 2: Multiple tool calls (if multiple tools are available)
@@ -91,38 +93,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Example 3: Streaming execution with event monitoring
         println!("\n=== Example 3: Streaming Execution ===");
-        let mut stream = executor.stream(prompt_args! {
-            "input" => "Perform a comprehensive analysis using all available tools"
-        }).await?;
+        let mut stream = executor
+            .stream(prompt_args! {
+                "input" => "Perform a comprehensive analysis using all available tools"
+            })
+            .await?;
 
         use futures_util::StreamExt;
         while let Some(event) = stream.next().await {
             match event? {
-                langchain_rust::agent::mcp_executor::McpAgentEvent::Planning => {
+                McpAgentEvent::Planning => {
                     println!("🤔 Agent is planning...");
                 }
-                langchain_rust::agent::mcp_executor::McpAgentEvent::ToolCall { tool_name, .. } => {
+                McpAgentEvent::ToolCall { tool_name, .. } => {
                     println!("🔧 Calling tool: {}", tool_name);
                 }
-                langchain_rust::agent::mcp_executor::McpAgentEvent::ParallelToolCalls { tool_names, count } => {
+                McpAgentEvent::ParallelToolCalls { tool_names, count } => {
                     println!("⚡ Calling {} tools in parallel: {:?}", count, tool_names);
                 }
-                langchain_rust::agent::mcp_executor::McpAgentEvent::ToolResult { tool_name, execution_time_ms, .. } => {
+                McpAgentEvent::ToolResult {
+                    tool_name,
+                    execution_time_ms,
+                    ..
+                } => {
                     println!("✅ Tool {} completed in {}ms", tool_name, execution_time_ms);
                 }
-                langchain_rust::agent::mcp_executor::McpAgentEvent::ParallelToolResults { results } => {
+                McpAgentEvent::ParallelToolResults { results } => {
                     println!("⚡ Parallel execution completed:");
                     for (tool_name, _, time_ms) in results {
                         println!("  - {}: {}ms", tool_name, time_ms);
                     }
                 }
-                langchain_rust::agent::mcp_executor::McpAgentEvent::McpError { error, tool_name, recoverable } => {
-                    println!("❌ MCP Error in {}: {} (recoverable: {})", tool_name, error, recoverable);
+                McpAgentEvent::McpError {
+                    error,
+                    tool_name,
+                    recoverable,
+                } => {
+                    println!(
+                        "❌ MCP Error in {}: {} (recoverable: {})",
+                        tool_name, error, recoverable
+                    );
                 }
-                langchain_rust::agent::mcp_executor::McpAgentEvent::Error { error } => {
+                McpAgentEvent::Error { error } => {
                     println!("❌ Error: {}", error);
                 }
-                langchain_rust::agent::mcp_executor::McpAgentEvent::Finished { output } => {
+                McpAgentEvent::Finished { output } => {
                     println!("🎉 Execution completed!");
                     println!("Final output: {}", output);
                     break;
@@ -136,14 +151,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             OpenAiToolAgentBuilder::new()
                 .tools(&mcp_tools)
                 .prefix("You are an AI assistant. Execute tools sequentially for careful analysis.")
-                .build(OpenAI::default())?
+                .build(OpenAI::default())?,
         ))
         .with_parallel_execution(false)
         .with_max_iterations(5);
 
-        let result = sequential_executor.invoke(prompt_args! {
-            "input" => "Analyze the system step by step using available tools"
-        }).await?;
+        let result = sequential_executor
+            .invoke(prompt_args! {
+                "input" => "Analyze the system step by step using available tools"
+            })
+            .await?;
         println!("Sequential result: {}", result);
 
         println!("\n✨ Enhanced MCP agent demonstration completed!");
@@ -160,21 +177,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Helper function to demonstrate MCP tool capabilities
 #[cfg(feature = "mcp")]
-async fn demonstrate_mcp_capabilities(client: &McpClient) -> Result<(), Box<dyn std::error::Error>> {
+async fn demonstrate_mcp_capabilities(
+    client: &McpClient,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("=== MCP Server Capabilities ===");
-    
+
     // List all available tools
     let tools = client.list_tools().await?;
     println!("Available tools: {}", tools.len());
-    
+
     for tool in &tools {
         println!("Tool: {}", tool.name);
         if let Some(description) = &tool.description {
             println!("  Description: {}", description);
         }
-        println!("  Schema: {}", serde_json::to_string_pretty(&tool.input_schema)?);
+        println!(
+            "  Schema: {}",
+            serde_json::to_string_pretty(&tool.input_schema)?
+        );
     }
-    
+
     Ok(())
 }
 
@@ -186,16 +208,13 @@ fn create_mcp_configs() -> Vec<McpClientConfig> {
         McpClientConfig::new_sse("http://localhost:8000/sse")
             .with_client_name("langchain-rust-client")
             .with_client_version("1.0.0"),
-        
         // Child process for Python MCP servers
         McpClientConfig::new_child_process(
             "python",
-            vec!["-m".to_string(), "my_mcp_server".to_string()]
+            vec!["-m".to_string(), "my_mcp_server".to_string()],
         ),
-        
         // Stdio for direct communication
         McpClientConfig::new_stdio(),
-        
         // Streamable HTTP for HTTP-based servers
         McpClientConfig::new_streamable_http("http://localhost:8080/stream"),
     ]

@@ -1,16 +1,12 @@
 use langchain_rust::{
     agent::{
-        capabilities::{
-            CapabilityAgentBuilder, CapableAgent, DefaultReflectionCapability,
-            DefaultTaskPlanningCapability, DefaultCodeExecutionCapability, DefaultReActCapability,
-            CapabilityBuilderExt,
-        },
-        chat::ChatAgentBuilder,
-        AgentExecutor,
+        CapabilityAgentBuilder, CapableAgent, DefaultReflectionCapability,
+        DefaultTaskPlanningCapability, DefaultCodeExecutionCapability, DefaultReActCapability,
+        CapabilityBuilderExt, ConversationalAgentBuilder, AgentExecutor,
+        AgentCapability, ReflectionCapability,
     },
     llm::openai::OpenAI,
-    tools::{Tool, CommandExecutor},
-    prompt::PromptArgs,
+    tools::Tool,
 };
 use std::sync::Arc;
 use std::error::Error;
@@ -57,14 +53,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create some tools
     let tools: Vec<Arc<dyn Tool>> = vec![
         Arc::new(ExampleTool),
-        Arc::new(CommandExecutor::new()),
     ];
     
     println!("🚀 Agent Capabilities System Example\n");
     
     // Example 1: Basic agent with reflection capability
     println!("📝 Example 1: Agent with Reflection Capability");
-    let base_agent = ChatAgentBuilder::new()
+    let base_agent = ConversationalAgentBuilder::new()
         .tools(&tools)
         .build(llm.clone())?;
     
@@ -81,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Example 2: Agent with multiple capabilities using fluent interface
     println!("🔧 Example 2: Multi-Capability Agent (Fluent Interface)");
-    let base_agent2 = ChatAgentBuilder::new()
+    let base_agent2 = ConversationalAgentBuilder::new()
         .tools(&tools)
         .build(llm.clone())?;
     
@@ -101,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Example 3: Preset Capability Combinations");
     
     // Research-focused agent
-    let base_agent3 = ChatAgentBuilder::new()
+    let base_agent3 = ConversationalAgentBuilder::new()
         .tools(&tools)
         .build(llm.clone())?;
     
@@ -109,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔍 Research agent capabilities: {:?}", research_agent.list_capabilities());
     
     // Development-focused agent
-    let base_agent4 = ChatAgentBuilder::new()
+    let base_agent4 = ConversationalAgentBuilder::new()
         .tools(&tools)
         .build(llm.clone())?;
     
@@ -117,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("💻 Development agent capabilities: {:?}", dev_agent.list_capabilities());
     
     // Analysis-focused agent
-    let base_agent5 = ChatAgentBuilder::new()
+    let base_agent5 = ConversationalAgentBuilder::new()
         .tools(&tools)
         .build(llm.clone())?;
     
@@ -128,10 +123,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 4: Using capabilities with AgentExecutor
     println!("⚡ Example 4: Running Agent with Capabilities");
     
-    let executor = AgentExecutor::from_agent(multi_capability_agent);
+    let _executor = AgentExecutor::from_agent(multi_capability_agent);
     
     // Create a sample input
-    let inputs = std::collections::HashMap::from([
+    let _inputs = std::collections::HashMap::from([
         ("input".to_string(), json!("Analyze the current state and plan next steps"))
     ]);
     
@@ -147,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧠 Example 5: Capability-Specific Features");
     
     // Create an agent with reflection capability
-    let base_agent6 = ChatAgentBuilder::new()
+    let base_agent6 = ConversationalAgentBuilder::new()
         .tools(&tools)
         .build(llm.clone())?;
     
@@ -172,11 +167,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 6: Capability priorities and configuration
     println!("⚙️ Example 6: Advanced Configuration");
     
-    let base_agent7 = ChatAgentBuilder::new()
+    let base_agent7 = ConversationalAgentBuilder::new()
         .tools(&tools)
         .build(llm.clone())?;
     
-    let configured_agent = CapabilityAgentBuilder::new(base_agent7)
+    let _configured_agent = CapabilityAgentBuilder::new(base_agent7)
         .with_reflection_priority(DefaultReflectionCapability::new(), 10) // High priority
         .with_task_planning_priority(DefaultTaskPlanningCapability::new(), 5) // Medium priority
         .with_code_execution_priority(DefaultCodeExecutionCapability::new(), 8) // High priority
@@ -215,7 +210,7 @@ mod tests {
         let llm = OpenAI::default();
         let tools: Vec<Arc<dyn Tool>> = vec![Arc::new(ExampleTool)];
         
-        let base_agent = ChatAgentBuilder::new()
+        let base_agent = ConversationalAgentBuilder::new()
             .tools(&tools)
             .build(llm)
             .unwrap();
@@ -235,7 +230,7 @@ mod tests {
         let llm = OpenAI::default();
         let tools: Vec<Arc<dyn Tool>> = vec![Arc::new(ExampleTool)];
         
-        let base_agent = ChatAgentBuilder::new()
+        let base_agent = ConversationalAgentBuilder::new()
             .tools(&tools)
             .build(llm)
             .unwrap();
@@ -257,7 +252,7 @@ mod tests {
         let llm = OpenAI::default();
         let tools: Vec<Arc<dyn Tool>> = vec![Arc::new(ExampleTool)];
         
-        let base_agent = ChatAgentBuilder::new()
+        let base_agent = ConversationalAgentBuilder::new()
             .tools(&tools)
             .build(llm)
             .unwrap();
