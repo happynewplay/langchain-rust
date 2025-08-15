@@ -29,5 +29,8 @@ mod mcp_executor;
 #[cfg(feature = "mcp")]
 pub use mcp_executor::*;
 
+mod capabilities;
+pub use capabilities::*;
+
 mod error;
 pub use error::*;
