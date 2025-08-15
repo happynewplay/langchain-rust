@@ -46,7 +46,7 @@ mod tests;
 
 pub use client::{McpClient, McpClientConfig, McpTransport};
 pub use error::McpError;
-pub use tool::McpTool;
+pub use tool::{McpTool, McpToolMarker};
 
 // Re-export commonly used types from rmcp for convenience
 pub use rmcp::model::Tool as RmcpTool;

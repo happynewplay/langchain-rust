@@ -10,12 +10,27 @@ use crate::tools::Tool;
 
 use super::error::McpError;
 
+/// Marker trait to identify MCP tools
+pub trait McpToolMarker: Send + Sync {
+    /// Returns true if this is an MCP tool
+    fn is_mcp_tool(&self) -> bool {
+        true
+    }
+
+    /// Get the MCP server identifier if available
+    fn mcp_server_id(&self) -> Option<String> {
+        None
+    }
+}
+
 /// A wrapper around an MCP tool that implements the langchain-rust Tool trait
 pub struct McpTool {
     /// The underlying MCP tool definition
     tool: rmcp::model::Tool,
     /// The MCP client used to call the tool
     client: Arc<RunningService<RoleClient, InitializeRequestParam>>,
+    /// Optional server identifier for grouping tools by server
+    server_id: Option<String>,
 }
 
 impl McpTool {
@@ -24,7 +39,24 @@ impl McpTool {
         tool: rmcp::model::Tool,
         client: Arc<RunningService<RoleClient, InitializeRequestParam>>,
     ) -> Self {
-        Self { tool, client }
+        Self {
+            tool,
+            client,
+            server_id: None,
+        }
+    }
+
+    /// Create a new MCP tool wrapper with server ID
+    pub fn with_server_id(
+        tool: rmcp::model::Tool,
+        client: Arc<RunningService<RoleClient, InitializeRequestParam>>,
+        server_id: String,
+    ) -> Self {
+        Self {
+            tool,
+            client,
+            server_id: Some(server_id),
+        }
     }
 
     /// Get the underlying MCP tool definition
@@ -35,6 +67,11 @@ impl McpTool {
     /// Get the MCP client
     pub fn client(&self) -> &Arc<RunningService<RoleClient, InitializeRequestParam>> {
         &self.client
+    }
+
+    /// Get the server ID if available
+    pub fn server_id(&self) -> Option<&String> {
+        self.server_id.as_ref()
     }
 }
 
@@ -86,6 +123,16 @@ impl Tool for McpTool {
                 "value": input,
             }),
         }
+    }
+}
+
+impl McpToolMarker for McpTool {
+    fn is_mcp_tool(&self) -> bool {
+        true
+    }
+
+    fn mcp_server_id(&self) -> Option<String> {
+        self.server_id.clone()
     }
 }
 
